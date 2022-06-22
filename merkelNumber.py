@@ -15,22 +15,58 @@ class RK4:
         return v0 + (p1 + 2 * p2 + 2 * p3 + p4)/6
 
 """
-INPUT DATA FOR COOLING TOWER (GLOBAL VARIABLES)
-
+EQUATIONS GOVERNING THE MERKEL NUMBER CALCULATION METHOD
 """
 
-T_wi = 39.67 + 273.15    #312.75
-T_wo = 27.77 + 273.15   #300.92
-w = 0.00616336          #kg/kg
-i_ma = 25291.87496      #J/kg
-p_abs = 101712.27       # Pa
-n = 2                   # db
-m_wi = 3.999            # kg/s
-m_a = 4.134             # kg/s
+def get_j(delta_Tw, c_pw, mw_ma, w_ws, w0, i_masw, i_ma_n, Le, i_v, T_w):
+    return delta_Tw * ((c_pw * mw_ma * (w_ws - w0))/(i_masw - i_ma_n + (Le - 1) * (i_masw - i_ma_n - (w_ws - w0)*i_v) - (w_ws - w0) * c_pw * (T_w - 273.15)))
+    
+def get_k(delta_Tw, c_pw, mw_ma, w_sw, w0, T_w, i_masw, i_ma_0, Le, i_v):
+    return delta_Tw * c_pw * mw_ma * (1 + ((w_sw - w0) * c_pw * T_w)/(i_masw - i_ma_0 + (Le - 1) * (i_masw - i_ma_0 - (w_sw - w0) * i_v) - (w_sw - w0) * c_pw * T_w))
+
+def get_l(delta_Tw, c_pw, i_masw, Le, w_sw, i_v, w_0, Tw, i_ma_n):
+    return (delta_Tw * c_pw)/(i_masw - i_ma_n + (Le - 1) * (i_masw - i_ma_n - (w_sw - w_0) * i_v) - (w_sw - w_0) * c_pw * Tw)
+
+"""
+EQUATIONS GOVERNING THE COOLING TOWER THERMODYNAMICS
+"""
+# Unsaturated case
+
+def get_dX_dz(baaz, w_s, w, m_a):
+    return (baaz * w_s - w) / m_a
+
+def get_dmw_dz(baaz, X_s_w, X_s_a):
+    return baaz * (X_s_w - X_s_a)
+
+def get_dTa_dz(Le, T_w, T_a, c_pa, c_pv, w, w_s, m_a):
+    return baaz * (Le * (T_w - T_a) * (c_pa + c_pv * w) + (c_pv * T_w - c_pv * T_a) * (w_s - w)) /(m_a * (c_pa + c_pv * w))
+
+def get_dTw_dz(Le, T_w, T_a, c_pa, c_pv, r_0, c_w, X_s, X, m_w):
+    return baaz * (Le * (T_w - T_a) * (c_pa + c_pv * X) + (r_0 + c_pv * T_w - c_w * T_w) * (X_s - X)) / (m_w * c_w)
+
+# Saturated case
+
+def get_dmw_dz_sat(baaz, X_s_w, X_s_a):
+    return baaz * (X_s_w - X_s_a)
+
+def get_dX_dZ_sat(baaz, X_s_w, X_s_a, m_a):
+    return (baaz * (X_s_w - X_s_a)) / m_a
+
+def get_dTa_dZ_sat(baaz, m_a, c_pa, Le, T_a, T_w, X_s_w, r_0, c_pv_w, c_w_a, X, X_s_a, c_pv_a, c_pa_a, dX_dT):
+    return - 1 * ((baaz / m_a) * (c_pa * Le * (T_a - T_w) - X_s_w * (r_0 + c_pv_w * T_w) + c_w_a * (Le * (T_a - T_w) * (X - X_s_a) + T_a * (X_s_w - X_s_a)) + X_s_a * (r_0 + c_pv_a * Le * (T_a - T_w) + c_pv_w * T_w)) / (c_pa_a + c_w_a * X + dX_dT * (r_0 + c_pv_a * T_a - c_w_a * T_a) + X_s_a * (c_pv_a - c_w_a)))
+
+def get_dTw_dZ_sat(r_0, c_pv_w, T_w, c_w_w, X_s_w, X_s_a, Le, T_a, c_pa_a, c_w_a, X, c_pv_a, m_w):
+    return baaz * ((r_0 + c_pv_w * T_w - c_w_w * T_w) * (X_s_w - X_s_a) + Le * (T_w - T_a) * (c_pa_a + c_w_a * (X - X_s_a) + c_pv_a * X_s_a)) / (c_w_w * m_w)
 
 """
 PROPERTY FUNCTIONS
 """
+
+def get_Beta_a_Az(Me, m_w, H):
+    # Heat condoctivity and diffusitivity constant of given cooling tower derived from previously determined Merkel number.
+    baaz = Me * m_w / H
+    return baaz
+
 def get_c_pa(T):
     # Specific heat capacity of dry air
      return 1.045356 * 10**3 - 3.161783 * 10 ** (-1) * T + 7.083814 * 10 ** (-4) * T ** 2 - 2.705209 * 10 ** (-7) * T ** 3 
@@ -71,33 +107,29 @@ def get_mv_ma(m_wi, m_a, w_i):
     # Mass balance at given intersection
     return  m_wi / m_a * (1 - m_a/m_wi * (0.02226 - w_i))
 
-def get_j(delta_Tw, c_pw, mw_ma, w_ws, w0, i_masw, i_ma_n, Le, i_v, T_w):
-    return delta_Tw * ((c_pw * mw_ma * (w_ws - w0))/(i_masw - i_ma_n + (Le - 1) * (i_masw - i_ma_n - (w_ws - w0)*i_v) - (w_ws - w0) * c_pw * (T_w - 273.15)))
-    
-def get_k(delta_Tw, c_pw, mw_ma, w_sw, w0, T_w, i_masw, i_ma_0, Le, i_v):
-    return delta_Tw * c_pw * mw_ma * (1 + ((w_sw - w0) * c_pw * T_w)/(i_masw - i_ma_0 + (Le - 1) * (i_masw - i_ma_0 - (w_sw - w) * i_v) - (w_sw - w0) * c_pw * T_w))
-
-def get_l(delta_Tw, c_pw, i_masw, Le, w_sw, i_v, w_0, Tw, i_ma_n):
-    return (delta_Tw * c_pw)/(i_masw - i_ma_n + (Le - 1) * (i_masw - i_ma_n - (w_sw - w) * i_v) - (w_sw - w_0) * c_pw * Tw)
-
 def getDB(Enth, X):
+    #Dry bulb temperature of air
     return (Enth/1000 - 2501 * X) / (1.006 + 1.86 * X) + 273.15
 
 def getWB(X):
+    # Wet bulb temperature of air
     return (math.log(X/ 0.0039)) / 0.0656 + 273.15
 
 def get_i_ma(c_pv_act, c_pa_act, T_db_act, X_act):
+    # Specific enthalpy of humid air
     return c_pa_act * (T_db_act - 273.15) + X_act * (2501598 + c_pv_act * (T_db_act - 273.15))
 
 def get_w(T_wb, T, p_vwb, p_abs):
+    # Humidity of air in kg water / kg air
     return ((2501.6 - 2.3263 * (T_wb - 273.15)) / (2501.6 + 1.8577 * (T - 273.15) - 4.184 * (T_wb - 273.15))) * ((0.62509 * p_vwb)/(p_abs - 1.005 * p_vwb)) - ((1.00416 * (T - T_wb))/(2501.6 + 1.8577 * (T - 273.15) - 4.184 * (T_wb - 273.15)))
     
 def get_satT(p_v):
+    # Temperature of saturated humid air at atmospheric pressure
     return 164.630366 + 1.832295 * 10 ** (-3) * p_v + 4.27215 * 10 ** (-10) * p_v ** 2 + 3.738954 * 10 ** 3 * p_v ** (-1) - 7.01204 * 10 ** 5 * p_v ** (-2) + 16.161488 * math.log(p_v) - 1.437169 * 10 ** (-4) * p_v * math.log(p_v)
+
 """
 CHECK SATURATION LEVEL
 """
-
 def checkSaturation(i_ma_act, x_act):
 
     T_db = getDB(i_ma_act, x_act)
@@ -109,24 +141,116 @@ def checkSaturation(i_ma_act, x_act):
         return False
 
 """
-MAIN CYCLE
+CALCULATE THE DIFFERENT STREAMS IN A SPECIFIC COOLING TOWER
 """
 
-def main():
+def coolingTower(T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 2500900):
 
-    T_wi = 39.67 + 273.15    #312.75
-    T_wo = 27.77 + 273.15   #300.92
-    w = 0.00616336          #kg/kg
-    i_ma = 25291.87496      #J/kg
-    p_abs = 101712.27       # Pa
-    n = 2                   # db
-    m_wi = 3.999            # kg/s
-    m_a = 4.134             # kg/s
+    T_w_n = T_w_n + 273.15
+    T_a_n = T_a_n + 273.15
+    m_w_n = m_w_n
+    m_a_n = m_a_n
+    w_n = w_n
+
+    waterTemp = []
+    airTemp = []
+    Humidity = []
+    waterFlow = []
+
+    waterTemp.append(T_w_n)
+    airTemp.append(T_w_n)
+    Humidity.append(w_n)
+    waterFlow.append(m_w_n)
+
+    step = 100
+    incr = H / step
+
+    SAT = False
+
+    for i in range(step):
+
+        T_w_n = waterTemp[-1]
+        T_a_n = airTemp[-1]
+        w_n = Humidity[-1]
+        m_w_n = waterFlow[-1]
+
+        WT = RK4("waterTemp", T_w_n)
+        AT = RK4("airTemperature", T_a_n)
+        HU = RK4("Humidity", w_n)
+        WF = RK4("waterFlow", m_w_n)
+
+        for i in range(4):
+            if SAT == False:
+                
+                T_mid = (T_w_n + 273.15)/2
+                c_pv = get_c_pv(T_mid)
+                c_pa = get_c_pa(T_mid)
+                c_pw = get_c_pw(T_mid)
+                p_vwb = get_p_wv(getWB(w_n))
+                p_wv = get_p_wv(T_w_n)
+                w_s = get_w_ws(p_abs, p_vwb)
+                Le = get_Le()
+                w_sw = get_w_ws(p_abs, p_wv)
+                dmw_dZ = get_dmw_dz(baaz, w_sw, w_n)
+                WF.param.append(dmw_dZ)
+
+                dX_dZ = get_dX_dz(baaz, w_sw, w_n, m_a_n)
+                HU.param.append(dX_dZ)
+
+                dTa_dZ = get_dTa_dz(Le, T_w_n, T_a_n, c_pa, c_pv, w_n, w_s, m_a_n)
+                AT.param.append(dTa_dZ)
+
+                dTw_dZ = get_dTw_dz(Le, T_w_n, T_a_n, c_pa, c_pv, r_0, c_pw, w_s, w_n, m_w_n)
+                WT.param.append(dTw_dZ)
+
+            else:
+                dmw_dZ = get_dmw_dz_sat()
+                dX_dZ = get_dX_dZ_sat()
+                dTa_dZ = get_dTa_dZ_sat()
+                dTw_dZ = get_dTw_dZ_sat()
+
+            if i == 2:
+                T_w_n = WT.value + dTw_dZ
+                T_a_n = AT.value + dTa_dZ
+                w_n = HU.value + dX_dZ
+                m_w_n = WF.value + dX_dZ
+
+            else:
+                T_w_n = WT.value + dTw_dZ/2
+                T_a_n = AT.value + dTa_dZ/2
+                w_n = HU.value + dX_dZ/2
+                m_w_n = WF.value + dX_dZ/2
+
+        waterTemp.append(WT.getNewValue())
+        airTemp.append(AT.getNewValue())
+        Humidity.append(HU.getNewValue())
+        waterFlow.append(WF.getNewValue())
+
+        if SAT == False:
+                if checkSaturation(Enthalpy[-1], Humidity[-1]):
+                    SAT = True
+
+
+
+"""
+CALCULATE THE MERKEL NUMBER FOR GIVEN COOLING TOWER PARAMETERS
+"""
+def Merkel(T_wi_U, T_wo_U, T_a_in, w_U, m_wi_U, m_a_U, p_abs=101712.27):
+    
+    T_wi = T_wi_U + 273.15
+    T_wo = T_wo_U + 273.15
+    w = w_U
+    i_ma = get_i_ma(get_c_pv(T_wo), get_c_pa(T_a_in + 273.15), T_a_in + 273.15, w)
+    p_abs = 101712.27
+    n = 100
+    m_wi = m_wi_U
+    m_a = m_a_U
 
     Humidity = []
     Enthalpy = []
     Merkel = []
     Temperature = []
+    waterFlow = []
 
     Humidity.append(w)
     Enthalpy.append(i_ma)
@@ -135,9 +259,8 @@ def main():
 
     SAT = False
 
-    step = 2
     delta_T_w = round((T_wi - T_wo)/n, 4)
-    for i in range(step):
+    for i in range(n):
                 
         w_n = Humidity[-1]
         i_ma_n = Enthalpy[-1]
@@ -152,7 +275,7 @@ def main():
         L = RK4("k", Me_n)
 
         T_w_0 = T_w_n
-        for i in range(4):
+        for itr in range(4):
 
             if SAT == False:
                 T_mid = (T_w_n + 273.15)/2
@@ -166,6 +289,8 @@ def main():
                 i_masw = get_i_masw(c_pa, T_w_n , w_ws, i_v)
                 Le = get_Le(w_ws, w_n)
                 mw_ma = get_mv_ma(m_wi, m_a, w_n)
+                waterFlow.append((m_wi-((mw_ma * m_a_U)) * 3600)/1000)
+                # waterFlow.append(mw_ma * m_a)
                 j = get_j(delta_T_w, c_pw, mw_ma, w_ws, w_n, i_masw, i_ma_n, Le, i_v, T_w_n)
                 # j = round(j,6)
                 J.param.append(j)
@@ -180,7 +305,6 @@ def main():
                 T_db = getDB(Enthalpy[-1], Humidity[-1])
                 T_wb= (T_wb + T_db)/2
                 p_vwb = get_p_wv(T_wb)
-                # w_sa = get_w(T_wb, get_satT(p_vwb), p_vwb, p_abs)
                 w_sa = get_w(T_wb, get_satT(p_vwb), p_vwb, p_abs)
                 T_mid = (T_w_n + 273.15)/2
                 c_pa = get_c_pa(T_mid)
@@ -193,6 +317,8 @@ def main():
                 i_masw = get_i_masw(c_pa, T_w_n , w_ws, i_v)
                 Le = get_Le(w_ws, w_n)
                 mw_ma = get_mv_ma(m_wi, m_a, w_n)
+                waterFlow.append((m_wi-((mw_ma * m_a_U)) * 3600)/1000)
+                # waterFlow.append(mw_ma * m_a)
                 j = get_j(delta_T_w, c_pw, mw_ma, w_ws, w_sa, i_masw, i_ma_n, Le, i_v, T_w_n)
                 # j = round(j,6)
                 J.param.append(j)
@@ -211,17 +337,22 @@ def main():
                 i_ma_n = K.value + k/2 
                 w_n = J.value + j/2 
                 T_w_n = T_w_0 + delta_T_w/2
-            print()
         
         Humidity.append((J.getNewValue()))
         Enthalpy.append((K.getNewValue()))
         Merkel.append((L.getNewValue()))
         Temperature.append(Temperature[-1] + delta_T_w)
 
-        print()
-
         if SAT == False:
             if checkSaturation(Enthalpy[-1], Humidity[-1]):
                 SAT = True
 
-main()
+    return Merkel[-1]
+
+# Validation
+Nouriani = Merkel(37, 23, 30, 0.00262, 3, 3)
+Kloppers = Merkel(39.67, 27.77, 9.7, 0.00616336, 3.999, 4.134)
+
+baaz = get_Beta_a_Az(Nouriani, 3, 1.2)
+
+Merkels = []
