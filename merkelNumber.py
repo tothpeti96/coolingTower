@@ -38,11 +38,14 @@ def get_dX_dz(baaz, w_s, w, m_a):
 def get_dmw_dz(baaz, X_s_w, X_s_a):
     return baaz * (X_s_w - X_s_a)
 
-def get_dTa_dz(Le, T_w, T_a, c_pa, c_pv, w, w_s, m_a):
+def get_dTa_dz(baaz, Le, T_w, T_a, c_pa, c_pv, w, w_s, m_a):
     return baaz * (Le * (T_w - T_a) * (c_pa + c_pv * w) + (c_pv * T_w - c_pv * T_a) * (w_s - w)) /(m_a * (c_pa + c_pv * w))
 
-def get_dTw_dz(Le, T_w, T_a, c_pa, c_pv, r_0, c_w, X_s, X, m_w):
+def get_dTw_dz(baaz, Le, T_w, T_a, c_pa, c_pv, r_0, c_w, X_s, X, m_w):
     return baaz * (Le * (T_w - T_a) * (c_pa + c_pv * X) + (r_0 + c_pv * T_w - c_w * T_w) * (X_s - X)) / (m_w * c_w)
+
+def get_dha_dz(c_pa_a, w, c_pv_a, dTa_dZ, T_a, dX_dZ):
+    return (c_pa_a + w * c_pv_a) * dTa_dZ + (2501598 + c_pv_a * T_a) * dX_dZ
 
 # Saturated case
 
@@ -55,8 +58,11 @@ def get_dX_dZ_sat(baaz, X_s_w, X_s_a, m_a):
 def get_dTa_dZ_sat(baaz, m_a, c_pa, Le, T_a, T_w, X_s_w, r_0, c_pv_w, c_w_a, X, X_s_a, c_pv_a, c_pa_a, dX_dT):
     return - 1 * ((baaz / m_a) * (c_pa * Le * (T_a - T_w) - X_s_w * (r_0 + c_pv_w * T_w) + c_w_a * (Le * (T_a - T_w) * (X - X_s_a) + T_a * (X_s_w - X_s_a)) + X_s_a * (r_0 + c_pv_a * Le * (T_a - T_w) + c_pv_w * T_w)) / (c_pa_a + c_w_a * X + dX_dT * (r_0 + c_pv_a * T_a - c_w_a * T_a) + X_s_a * (c_pv_a - c_w_a)))
 
-def get_dTw_dZ_sat(r_0, c_pv_w, T_w, c_w_w, X_s_w, X_s_a, Le, T_a, c_pa_a, c_w_a, X, c_pv_a, m_w):
+def get_dTw_dZ_sat(baaz, r_0, c_pv_w, T_w, c_w_w, X_s_w, X_s_a, Le, T_a, c_pa_a, c_w_a, X, c_pv_a, m_w):
     return baaz * ((r_0 + c_pv_w * T_w - c_w_w * T_w) * (X_s_w - X_s_a) + Le * (T_w - T_a) * (c_pa_a + c_w_a * (X - X_s_a) + c_pv_a * X_s_a)) / (c_w_w * m_w)
+
+def get_dha_dz_sat(c_pv_a, T_a, c_w_a, dX_dTa, w_s_a, c_p_v, c_pa_a, w, dX_dZ):
+    return ((2501598 + c_pv_a * T_a - c_w_a * T_a) * dX_dTa + w_s_a * (c_p_v - c_w_a) + c_pa_a + w * c_w_a) + c_w_a * T_a * dX_dZ
 
 """
 PROPERTY FUNCTIONS
@@ -144,52 +150,66 @@ def checkSaturation(i_ma_act, x_act):
 CALCULATE THE DIFFERENT STREAMS IN A SPECIFIC COOLING TOWER
 """
 
-def coolingTower(T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 2500900):
+def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 2501598):
 
     T_w_n = T_w_n + 273.15
     T_a_n = T_a_n + 273.15
     m_w_n = m_w_n
     m_a_n = m_a_n
     w_n = w_n
+    c_pa_act = get_c_pa((T_w_n + 273.15)/2)
+    c_pv_act = get_c_pv((T_w_n + 273.15)/2)
+    
 
     waterTemp = []
     airTemp = []
     Humidity = []
     waterFlow = []
+    Enthalpy = []
+    Height = []
 
     waterTemp.append(T_w_n)
     airTemp.append(T_w_n)
     Humidity.append(w_n)
-    waterFlow.append(m_w_n)
+    waterFlow.append(m_w_n)    
+    Enthalpy.append(get_i_ma(c_pv_act, c_pa_act, T_a_n, w_n))
 
-    step = 100
-    incr = H / step
-
+    step = 10
+    stepMerkel = Me / H
+    stepHeight = H/step
+    Merkel = 0
+    actHeight = 0
     SAT = False
 
     for i in range(step):
+
+        Merkel += stepMerkel
+        actHeight += stepHeight
+        baaz = Merkel / m_w_n
 
         T_w_n = waterTemp[-1]
         T_a_n = airTemp[-1]
         w_n = Humidity[-1]
         m_w_n = waterFlow[-1]
+        i_a_n = Enthalpy[-1]
 
         WT = RK4("waterTemp", T_w_n)
         AT = RK4("airTemperature", T_a_n)
         HU = RK4("Humidity", w_n)
         WF = RK4("waterFlow", m_w_n)
+        EN = RK4("Enthalpy", i_a_n)
 
         for i in range(4):
             if SAT == False:
                 
-                T_mid = (T_w_n + 273.15)/2
+                T_mid = (T_w_n)
                 c_pv = get_c_pv(T_mid)
                 c_pa = get_c_pa(T_mid)
                 c_pw = get_c_pw(T_mid)
                 p_vwb = get_p_wv(getWB(w_n))
                 p_wv = get_p_wv(T_w_n)
-                w_s = get_w_ws(p_abs, p_vwb)
-                Le = get_Le()
+                w_sw = get_w_ws(p_abs, p_vwb)
+                Le = get_Le(w_sw, w_n)
                 w_sw = get_w_ws(p_abs, p_wv)
                 dmw_dZ = get_dmw_dz(baaz, w_sw, w_n)
                 WF.param.append(dmw_dZ)
@@ -197,11 +217,14 @@ def coolingTower(T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 2500
                 dX_dZ = get_dX_dz(baaz, w_sw, w_n, m_a_n)
                 HU.param.append(dX_dZ)
 
-                dTa_dZ = get_dTa_dz(Le, T_w_n, T_a_n, c_pa, c_pv, w_n, w_s, m_a_n)
+                dTa_dZ = get_dTa_dz(baaz, Le, T_w_n, T_a_n, c_pa, c_pv, w_n, w_sw, m_a_n)
                 AT.param.append(dTa_dZ)
 
-                dTw_dZ = get_dTw_dz(Le, T_w_n, T_a_n, c_pa, c_pv, r_0, c_pw, w_s, w_n, m_w_n)
+                dTw_dZ = get_dTw_dz(baaz, Le, T_w_n, T_a_n, c_pa, c_pv, r_0, c_pw, w_sw, w_n, m_w_n)
                 WT.param.append(dTw_dZ)
+
+                dha_dZ = get_dha_dz(c_pa, w_n, c_pv, dTa_dZ, T_a_n, dX_dZ)
+                EN.param.append(dha_dZ)
 
             else:
                 dmw_dZ = get_dmw_dz_sat()
@@ -214,23 +237,26 @@ def coolingTower(T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 2500
                 T_a_n = AT.value + dTa_dZ
                 w_n = HU.value + dX_dZ
                 m_w_n = WF.value + dX_dZ
+                i_a_n = EN.value + dha_dZ
 
             else:
                 T_w_n = WT.value + dTw_dZ/2
                 T_a_n = AT.value + dTa_dZ/2
                 w_n = HU.value + dX_dZ/2
                 m_w_n = WF.value + dX_dZ/2
+                i_a_n = EN.value + dha_dZ/2
 
         waterTemp.append(WT.getNewValue())
         airTemp.append(AT.getNewValue())
         Humidity.append(HU.getNewValue())
         waterFlow.append(WF.getNewValue())
+        Height.append(actHeight)
 
-        if SAT == False:
-                if checkSaturation(Enthalpy[-1], Humidity[-1]):
-                    SAT = True
+        # if SAT == False:
+        #         if checkSaturation(Enthalpy[-1], Humidity[-1]):
+        #             SAT = True
 
-
+    print("sth")
 
 """
 CALCULATE THE MERKEL NUMBER FOR GIVEN COOLING TOWER PARAMETERS
@@ -350,9 +376,7 @@ def Merkel(T_wi_U, T_wo_U, T_a_in, w_U, m_wi_U, m_a_U, p_abs=101712.27):
     return Merkel[-1]
 
 # Validation
-Nouriani = Merkel(37, 23, 30, 0.00262, 3, 3)
+merkelNum = Merkel(37, 23, 30, 0.00262, 3, 3)
 Kloppers = Merkel(39.67, 27.77, 9.7, 0.00616336, 3.999, 4.134)
 
-baaz = get_Beta_a_Az(Nouriani, 3, 1.2)
-
-Merkels = []
+coolingTower(merkelNum, 23, 30, 3, 3, 0.00262, 1.2)
