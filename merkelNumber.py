@@ -167,6 +167,8 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
     waterFlow = []
     Enthalpy = []
     Height = []
+    merNum = []
+    BAAZ = []
 
     waterTemp.append(T_w_n)
     airTemp.append(T_w_n)
@@ -174,8 +176,8 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
     waterFlow.append(m_w_n)    
     Enthalpy.append(get_i_ma(c_pv_act, c_pa_act, T_a_n, w_n))
 
-    step = 10
-    stepMerkel = Me / H
+    step = 12
+    stepMerkel = Me/step
     stepHeight = H/step
     Merkel = 0
     actHeight = 0
@@ -184,8 +186,10 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
     for i in range(step):
 
         Merkel += stepMerkel
+        merNum.append(Merkel)
         actHeight += stepHeight
-        baaz = Merkel / m_w_n
+        baaz = 0
+        BAAZ.append(baaz)
 
         T_w_n = waterTemp[-1]
         T_a_n = airTemp[-1]
@@ -199,10 +203,12 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
         WF = RK4("waterFlow", m_w_n)
         EN = RK4("Enthalpy", i_a_n)
 
-        for i in range(4):
+        m_w_0 = m_w_n
+        baaz_0 = baaz
+        for j in range(4):
             if SAT == False:
                 
-                T_mid = (T_w_n)
+                T_mid = (T_w_n + 273.15)/2
                 c_pv = get_c_pv(T_mid)
                 c_pa = get_c_pa(T_mid)
                 c_pw = get_c_pw(T_mid)
@@ -232,7 +238,19 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
                 dTa_dZ = get_dTa_dZ_sat()
                 dTw_dZ = get_dTw_dZ_sat()
 
+            if i == 0:
+                print("sth")
+            elif i == 1 or i == 2:
+                print("sth")
+            elif i == 3:
+                print("sth")
+
             if i == 2:
+                nextMerkel = Merkel + stepMerkel
+                nextHeight = actHeight + stepHeight
+                nextBaaz = nextMerkel/nextHeight * m_w_0
+                baaz = baaz_0 + nextBaaz
+
                 T_w_n = WT.value + dTw_dZ
                 T_a_n = AT.value + dTa_dZ
                 w_n = HU.value + dX_dZ
@@ -240,6 +258,11 @@ def coolingTower(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27, r_0 = 
                 i_a_n = EN.value + dha_dZ
 
             else:
+                nextMerkel = Merkel + stepMerkel
+                nextHeight = actHeight + stepHeight
+                nextBaaz = nextMerkel/nextHeight * m_w_0
+                baaz = baaz_0 + nextBaaz/2
+
                 T_w_n = WT.value + dTw_dZ/2
                 T_a_n = AT.value + dTa_dZ/2
                 w_n = HU.value + dX_dZ/2
@@ -379,4 +402,4 @@ def Merkel(T_wi_U, T_wo_U, T_a_in, w_U, m_wi_U, m_a_U, p_abs=101712.27):
 merkelNum = Merkel(37, 23, 30, 0.00262, 3, 3)
 Kloppers = Merkel(39.67, 27.77, 9.7, 0.00616336, 3.999, 4.134)
 
-coolingTower(merkelNum, 23, 30, 3, 3, 0.00262, 1.2)
+coolingTower(merkelNum, 23, 30, 2.93, 3, 0.00262, 1.2)
