@@ -4,4 +4,4 @@ The repository calculates the thermodynamic proparties and flowrates of a given 
 The construction of the program calculating and validating the program for calculating the thermodynamic properties of the wet cooling tower was done according the following publications:
 
 1. Kloppers JC. A critical evalutaion and refinement of the performance prediction of wet-cooling towers. 2003;(December).
-2. 1. Klimanek A. Numerical Modelling of Natural Draft Wet-Cooling Towers. Arch Comput Methods Eng. 2013;20(1):61-109. doi:10.1007/s11831-013-9081-9
+2. Klimanek A. Numerical Modelling of Natural Draft Wet-Cooling Towers. Arch Comput Methods Eng. 2013;20(1):61-109. doi:10.1007/s11831-013-9081-9
