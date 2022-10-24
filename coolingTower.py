@@ -1,10 +1,6 @@
 from cmath import inf
 import math
 
-class Result:
-    def __init__(self, name):
-        self.name = name
-
 class RK4:
     def __init__(self, name, value):
         self.name = name
@@ -211,6 +207,7 @@ def coolingTowerStreams(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27,
         HU = RK4("Humidity", w_n)
         WF = RK4("waterFlow", m_w_n)
         EN = RK4("Enthalpy", i_a_n)
+        
 
         for j in range(4):
             if SAT == False:
@@ -301,7 +298,8 @@ def coolingTowerStreams(Me, T_w_n, T_a_n, m_w_n, m_a_n, w_n, H, p_abs=101712.27,
 
             if T_wb > airTemp[-1] - 273.15:
                 SAT = True
-    return waterTemp[-1], waterFlow[-1]
+                satH = (i + 1) * 0.1
+    return waterTemp[-1], waterFlow[-1], Humidity[-1]
 
 """
 CALCULATE THE MERKEL NUMBER FOR GIVEN COOLING TOWER PARAMETERS
@@ -425,152 +423,116 @@ def Merkel(T_wi, T_wo, T_a_i, w, m_wi, m_a, p_abs=101712.27):
     return Merkel[-1]
 
 
-def coolingTower(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_w_out, m_a, H, p_abs = 101712.27):
+"""
+BINARY SEARCH FOR THE CORRECT SOLUTION
+"""
 
-    """
-    REGRESSION CHECK FOR THE CORRECT SOLUTION
-    """
-
-    # deltaTemp = inf
-    # deltaFlow = inf
-
-    # solutions = []
-    # for i in range(12000,13000, 10):
-    #     for j in range(16000,17000, 10):
-    #         m_w_EST = i
-    #         m_a_EST = j
-    #         try:
-    #             MerkelNum = Merkel(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_a_EST, p_abs)
-    #             waterTemp, waterFlow = coolingTowerStreams(MerkelNum, T_w_out, T_a_in, m_w_EST, m_a_EST, w_in, H, p_abs)
-
-    #             actDeltaTemp = abs(waterTemp - T_w_in)
-    #             actDeltaFlow = abs(waterFlow - m_w_in)
-
-    #             if actDeltaTemp < deltaTemp and actDeltaFlow < deltaFlow:
-    #                 deltaTemp = actDeltaTemp
-    #                 deltaFlow = actDeltaFlow
-
-    #                 solutions.append((m_w_EST, m_a_EST))
-
-    #                 m_w_GUESSED = m_w_EST
-    #                 m_a_GUESSED = m_a_EST
-
-    #             print(m_w_EST)
-    #             print(m_a_EST)
-    #             print()
-
-    #         except:
-    #             pass
-
-    # errorMW = abs(m_w_GUESSED - m_w_in) / m_w_in * 100
-    # errorMA = abs(m_a_GUESSED - m_a) / m_a * 100
-
-    """
-    BINARY SEARCH FOR THE CORRECT SOLUTION
-    """
-
-    deltaTemp = inf
-    deltaFlow = inf
-    solutions = []
-
-    mw_START = 12000
-    mw_END = 13000
-
-    ma_START = 16000
-    ma_END = 17000
-
-
-    deltaMW = mw_END - mw_START
-    deltaMA = ma_END - ma_START
-
-    n = 2
+def coolingTower(T_w_in, T_w_out, T_a_in, w_in, m_w_in, H, p_abs = 101712.27):
     
-    regError = None
-    actSol = None
-    prevSol = None
+    sumError = inf
+
+    m_a_REG = None
+    m_w_REG = None
+
+    m_w_BOTTOM = 1
+    m_w_TOP = 20000
+    deltaMW = ((m_w_TOP - m_w_BOTTOM)/2)
+
+    m_a_BOTTOM = 1
+    m_a_TOP = 20000
+    deltaMA = ((m_a_TOP - m_a_BOTTOM)/2)
+
+    solutionsMW = []
+    solutionsMA = []
+    Merkels = []
 
     while True:
-        stepMW = deltaMW / n
-        stepMA = deltaMA / n
-
-        for i in range(mw_START, mw_END, int(stepMW)):
-            for j in range(mw_START, mw_END, int(stepMA)):
-                m_w_EST = i
-                m_a_EST = j
-
+        m_w_i = m_w_BOTTOM
+        while m_w_i <= m_w_TOP:
+            m_a_i = m_a_BOTTOM
+            while m_a_i <= m_a_TOP:
                 try:
-                    MerkelNum = Merkel(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_a_EST, p_abs)
-                    waterTemp, waterFlow = coolingTowerStreams(MerkelNum, T_w_out, T_a_in, m_w_EST, m_a_EST, w_in, H, p_abs)
+                    merkelNum = Merkel(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_a_i, p_abs)
+                    waterTemp, waterFlow, Humidity = coolingTowerStreams(merkelNum, T_w_out, T_a_in, m_w_i, m_a_i, w_in, H, p_abs)
+                    actDeltaFlow = (((abs(waterFlow - m_w_in))) / m_w_in) * 100
+                    actDeltaTemp = (((abs((waterTemp - 273.15) - T_w_in))) / T_w_in) * 100
 
-                    actDeltaTemp = abs(waterTemp - T_w_in)
-                    actDeltaFlow = abs(waterFlow - m_w_in)
+                    actError = actDeltaFlow + actDeltaTemp
 
-                    if actDeltaTemp < deltaTemp and actDeltaFlow < deltaFlow:
-                        deltaTemp = actDeltaTemp
-                        deltaFlow = actDeltaFlow
-
-                        solutions.append((m_w_EST, m_a_EST))
-
-                        m_w_GUESSED = m_w_EST
-                        m_a_GUESSED = m_a_EST
-
+                    if actError < sumError:
+                        m_w_REG = m_w_i
+                        m_a_REG = m_a_i
+                        Merkels.append(merkelNum)
+                        sumError = actError            
                 except:
                     pass
+    
+                m_a_i += deltaMA
+            m_w_i += deltaMW
 
-        actSol = solutions[-1]
-        if actSol != None and prevSol != None:
+        solutionsMW.append(m_w_REG)
+        solutionsMA.append(m_a_REG)
 
-    for i in range(12000,13000, 10):
-        for j in range(16000,17000, 10):
-            m_w_EST = i
-            m_a_EST = j
+        # if m_w_REG != m_w_BOTTOM:
+        m_w_BOTTOM = m_w_REG - (deltaMW/2)
+        # if m_w_REG != m_w_TOP:
+        m_w_TOP = m_w_REG + (deltaMW/2)
+        deltaMW = (m_w_TOP - m_w_BOTTOM)/2
+
+        if m_a_REG != m_a_BOTTOM:
+            m_a_BOTTOM = m_a_REG - (deltaMA/2)
+        if m_a_REG != m_a_TOP:
+            m_a_TOP = m_a_REG + (deltaMA/2)
+        deltaMA = (m_a_TOP - m_a_BOTTOM)/2
+
+        if deltaMW < 0.01 and deltaMA < 0.01:
+                break
+
+    sumError = inf
+    m_w_i = solutionsMW[-1]
+    solutionsMA = []
+
+    m_a_BOTTOM = 1
+    m_a_TOP = 20000
+    deltaMA = ((m_a_TOP - m_a_BOTTOM)/2)
+
+    while True:
+        m_a_i = m_a_BOTTOM
+        while m_a_i <= m_a_TOP:
             try:
-                MerkelNum = Merkel(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_a_EST, p_abs)
-                waterTemp, waterFlow = coolingTowerStreams(MerkelNum, T_w_out, T_a_in, m_w_EST, m_a_EST, w_in, H, p_abs)
-
-                actDeltaTemp = abs(waterTemp - T_w_in)
-                actDeltaFlow = abs(waterFlow - m_w_in)
-
-                if actDeltaTemp < deltaTemp and actDeltaFlow < deltaFlow:
-                    deltaTemp = actDeltaTemp
-                    deltaFlow = actDeltaFlow
-
-                    solutions.append((m_w_EST, m_a_EST))
-
-                    m_w_GUESSED = m_w_EST
-                    m_a_GUESSED = m_a_EST
-
-                print(m_w_EST)
-                print(m_a_EST)
-                print()
-
+                merkelNum = Merkel(T_w_in, T_w_out, T_a_in, w_in, m_w_in, m_a_i, p_abs)
+                waterTemp, waterFlow, Humidity = coolingTowerStreams(merkelNum, T_w_out, T_a_in, m_w_i, m_a_i, w_in, H, p_abs)
+                actDeltaFlow = (((abs(waterFlow - m_w_in))) / m_w_in) * 100
+                actDeltaTemp = (((abs((waterTemp - 273.15) - T_w_in))) / T_w_in) * 100
+                waterOutCalc = m_w_in - m_a_i * (Humidity - w_in)
+                waterError = (abs(m_w_i - waterOutCalc) / m_w_i) * 100
+                actDeltaFlow = (((abs(waterFlow - m_w_in))) / m_w_in) * 100
+                actDeltaTemp = (((abs((waterTemp - 273.15) - T_w_in))) / T_w_in) * 100
+                
+                actError = actDeltaTemp + actDeltaFlow + waterError
+                if actError < sumError:
+                    m_a_REG = m_a_i
+                    sumError = actError 
+                    solutionsMA.append(m_a_REG)
             except:
                 pass
+            m_a_i += deltaMA/20
 
-    errorMW = abs(m_w_GUESSED - m_w_in) / m_w_in * 100
-    errorMA = abs(m_a_GUESSED - m_a) / m_a * 100
+        if m_a_REG != m_a_BOTTOM:
+            m_a_BOTTOM = m_a_REG - (deltaMA/2)
+        if m_a_REG != m_a_TOP:
+            m_a_TOP = m_a_REG + (deltaMA/2)
     
-    print()
+        deltaMA = (m_a_TOP - m_a_BOTTOM)/2
 
+        if deltaMA < 0.1:
+            m_w_i = m_w_REG
+            m_a_i = m_a_REG
+            break
 
-def main():
+    return coolingTowerStreams(merkelNum, T_w_out, T_a_in, m_w_i, m_a_i, w_in, H, p_abs), m_a_REG, m_w_REG
 
-    # # Validation for the Merkel Number Calculation according to Kloppers et el.
-
-    # Kloppers_Merkel = Merkel(T_wi = 39.67, T_wo = 27.77, T_a_i = 9.7, w = 0.00616336, m_wi = 3.999, m_a = 4.134, p_abs = 101712.27)
-
-    # # Validation for the Cooling Tower calculation with the known streams.
-
-    # Klimanek1_Merkel = Merkel(T_wi=37, T_wo=23, T_a_i=30, w=0.00262, m_wi=3, m_a=3, p_abs = 101325)
-    # coolingTowerStreams(Me=Klimanek1_Merkel, T_w_n=23, T_a_n=30, m_w_n=2.93, m_a_n=3, w_n=0.00262, H=1.2, p_abs = 101325)
-
-    # Klimanek2_Merkel = Merkel(T_wi=40, T_wo=21.41, T_a_i=15.45, w=0.008127, m_wi=12500, m_a=16672.19, p_abs=84100)
-    # coolingTowerStreams(Me=Klimanek2_Merkel, T_w_n=21.41, T_a_n=15.45, m_w_n=12176, m_a_n=16672.19, w_n=0.008127, H=2.5, p_abs = 84100)
-
-    # Validation when the outlet water mass flow rate, the air flowrate are not known.
-
-    # coolingTower(T_w_in = 37, T_w_out=23, T_a_in = 30, w_in = 0.00262, m_w_in = 3, m_w_out = 2.93, m_a = 3, H = 1.2, p_abs = 101712.27)
-    coolingTower(T_w_in = 40, T_w_out=21.41, T_a_in = 15.45, w_in = 0.008127, m_w_in = 12500, m_w_out = 12176, m_a = 16672.19, H = 2.5, p_abs = 84100)
-
-
-main()
+def Validation():
+    # Checkin if binary search algorithm works with the validated dataset
+    return coolingTower(T_w_in = 40, T_w_out = 21.41, T_a_in = 15.45, w_in = 0.008127, m_w_in = 12500, H = 2.5, p_abs = 84100)
+# valData = Validation()
